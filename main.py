@@ -1,77 +1,71 @@
-# import necessary packages
-
+import pickle
 import cv2
-import numpy as np
 import mediapipe as mp
-import tensorflow as tf
-from tensorflow.keras.models import load_model
+import numpy as np
+import mouse
 
-# initialize mediapipe
-mpHands = mp.solutions.hands
-maxNumHands = 1
-hands = mpHands.Hands(max_num_hands=maxNumHands, min_detection_confidence=0.7)
-mpDraw = mp.solutions.drawing_utils
+model_dict = pickle.load(open('.\model.p', 'rb'))
+model = model_dict['model']
 
-# Load the gesture recognizer model
-model = load_model('mp_hand_gesture')
-
-# Load class names
-f = open('gesture.names', 'r')
-classNames = f.read().split('\n')
-f.close()
-print(classNames)
-
-
-# Initialize the webcam
 cap = cv2.VideoCapture(0)
 
+mp_hands = mp.solutions.hands
+mp_drawing = mp.solutions.drawing_utils
+mp_drawing_styles = mp.solutions.drawing_styles
+maxNumHands = 1
+hands = mp_hands.Hands(max_num_hands=maxNumHands, min_detection_confidence=0.3)
+
+cntrlMouse = False
+
+labels_dict = {0: 'Fuck You', 1: 'Hand'}
 while True:
-    # Read each frame from the webcam
-    _, frame = cap.read()
+    data_aux = []
+    x_ = []
+    y_ = []
 
-    x, y, c = frame.shape
+    ret, frame = cap.read()
 
-    # Flip the frame vertically
-    frame = cv2.flip(frame, 1)
-    framergb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    H, W, _ = frame.shape
 
-    # Get hand landmark prediction
-    result = hands.process(framergb)
+    frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
-    # print(result)
-    
-    className = ''
+    results = hands.process(frame_rgb)
+    if results.multi_hand_landmarks:
+        for hand_landmarks in results.multi_hand_landmarks:
+            mp_drawing.draw_landmarks( frame, hand_landmarks, mp_hands.HAND_CONNECTIONS)
 
-    # post process the result
-    if result.multi_hand_landmarks:
-        landmarks = []
-        for handslms in result.multi_hand_landmarks:
-            for lm in handslms.landmark:
-                # print(id, lm)
-                lmx = int(lm.x * x)
-                lmy = int(lm.y * y)
+        for hand_landmarks in results.multi_hand_landmarks:
+            for i in range(len(hand_landmarks.landmark)):
+                x = hand_landmarks.landmark[i].x
+                y = hand_landmarks.landmark[i].y
 
-                landmarks.append([lmx, lmy])
+                x_.append(x)
+                y_.append(y)
 
-            # Drawing landmarks on frames
-            mpDraw.draw_landmarks(frame, handslms, mpHands.HAND_CONNECTIONS)
+            for i in range(len(hand_landmarks.landmark)):
+                x = hand_landmarks.landmark[i].x
+                y = hand_landmarks.landmark[i].y
+                data_aux.append(x - min(x_))
+                data_aux.append(y - min(y_))
 
-            # Predict gesture
-            prediction = model.predict([landmarks])
-            # print(prediction)
-            if maxNumHands == 1:
-                classID = np.argmax(prediction)
-                className = classNames[classID]
+        x1 = int(min(x_) * W) - 10
+        y1 = int(min(y_) * H) - 10
 
-    # show the prediction on the frame
-    cv2.putText(frame, className, (10, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,255,0), 2, cv2.LINE_AA)
+        x2 = int(max(x_) * W) - 10
+        y2 = int(max(y_) * H) - 10
 
-    # Show the final output
-    cv2.imshow("Output", frame) 
+        prediction = model.predict([np.asarray(data_aux)])
 
-    if cv2.waitKey(1) == ord('q'):
-        break
+        predicted_character = labels_dict[int(prediction[0])]
 
-# release the webcam and destroy all active windows
-cap.release()
-cv2.destroyAllWindows()
+        if cntrlMouse:
+            mouse.move(x1*5, y1*5)
+            if predicted_character == "Fuck You":
+               mouse.click('left') 
+        else:
+            cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 0), 2)
+            cv2.putText(frame, predicted_character, (x1, y1 - 10), cv2.FONT_HERSHEY_COMPLEX, 1.3, (0, 0, 0), 3,cv2.LINE_AA)
+
+
+    cv2.imshow('frame', frame)
+    cv2.waitKey(1)
