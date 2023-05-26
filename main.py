@@ -13,7 +13,7 @@ mp_hands = mp.solutions.hands
 mp_drawing = mp.solutions.drawing_utils
 mp_drawing_styles = mp.solutions.drawing_styles
 maxNumHands = 1
-hands = mp_hands.Hands(max_num_hands=maxNumHands, min_detection_confidence=0.3)
+hands = mp_hands.Hands(max_num_hands=maxNumHands, min_detection_confidence=0.7)
 
 cntrlMouse = False
 
@@ -63,8 +63,8 @@ while True:
             if predicted_character == "Fuck You":
                mouse.click('left') 
         else:
-            cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 0), 2)
-            cv2.putText(frame, predicted_character, (x1, y1 - 10), cv2.FONT_HERSHEY_COMPLEX, 1.3, (0, 0, 0), 3,cv2.LINE_AA)
+            cv2.rectangle(frame, (x1, y1), (x2, y2), (255, 0, 0), 2)
+            cv2.putText(frame, predicted_character, (x1, y1 - 10), cv2.FONT_HERSHEY_COMPLEX, 1.3, (255, 0, 0), 3,cv2.LINE_AA)
 
 
     cv2.imshow('frame', frame)
