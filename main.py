@@ -4,69 +4,95 @@ import mediapipe as mp
 import numpy as np
 import mouse
 
+#Loading pickle data
 model_dict = pickle.load(open('.\model.p', 'rb'))
 model = model_dict['model']
 
+#Instantiating camera
 cap = cv2.VideoCapture(0)
 
+#Mediapipe solutions
 mp_hands = mp.solutions.hands
 mp_drawing = mp.solutions.drawing_utils
 mp_drawing_styles = mp.solutions.drawing_styles
 maxNumHands = 1
 hands = mp_hands.Hands(max_num_hands=maxNumHands, min_detection_confidence=0.7)
 
+#Control Mouse Toggle
 cntrlMouse = False
 
+#Lable List
 labels_dict = {0: 'Fuck You', 1: 'Hand'}
-while True:
+
+#Body
+while cap.isOpened():
     data_aux = []
     x_ = []
     y_ = []
 
     ret, frame = cap.read()
-
+    #Get Window Size
     H, W, _ = frame.shape
 
-    frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    #Image correction
+    image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    image = cv2.flip(image, 1)
+    image.flags.writeable = False
+    results = hands.process(image)
+    image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
 
-    results = hands.process(frame_rgb)
     if results.multi_hand_landmarks:
         for hand_landmarks in results.multi_hand_landmarks:
-            mp_drawing.draw_landmarks( frame, hand_landmarks, mp_hands.HAND_CONNECTIONS)
-            for i in range(len(hand_landmarks.landmark)):
-                x = hand_landmarks.landmark[i].x
-                y = hand_landmarks.landmark[i].y
 
-                x_.append(x)
-                y_.append(y)
+            #Rect controls
+            x_max = 0
+            y_max = 0
+            x_min = W
+            y_min = H
 
-            for i in range(len(hand_landmarks.landmark)):
-                x = hand_landmarks.landmark[i].x
-                y = hand_landmarks.landmark[i].y
-                data_aux.append(x - min(x_))
-                data_aux.append(y - min(y_))
+            #Draw Hand Points
+            mp_drawing.draw_landmarks(image, hand_landmarks, mp_hands.HAND_CONNECTIONS)
 
-        
+            for lm in hand_landmarks.landmark:
+                #Rect Size calculator
+                x, y = int(lm.x * W), int(lm.y * H)
+                if x > x_max:
+                    x_max = x
+                if x < x_min:
+                    x_min = x
+                if y > y_max:
+                    y_max = y
+                if y < y_min:
+                    y_min = y
 
-        x1 = int(min(x_) * W) - 10
-        y1 = int(min(y_) * H) - 10
+                #X,Y lists
+                x_.append(lm.x)
+                y_.append(lm.y)
+            
 
-        x2 = int(max(x_) * W) - 10
-        y2 = int(max(y_) * H) - 10
+            #Building readable predict data
+            for lm in hand_landmarks.landmark:
+                data_aux.append(lm.x - min(x_))
+                data_aux.append(lm.y - min(y_))
 
+        #Predict Gesture
         prediction = model.predict([np.asarray(data_aux)])
 
+        #Get label
         predicted_character = labels_dict[int(prediction[0])]
 
+        #Mouse control
         if cntrlMouse:
-            mouse.move(x1*5, y1*5)
+            mouse.move(x_min*5, y_min*5)
             if predicted_character == "Fuck You":
                mouse.click('left') 
         else:
-            cv2.rectangle(frame, (x1, y1), (x2, y2), (255, 0, 0), 2)
-            cv2.putText(frame, predicted_character, (x1, y1 - 10), cv2.FONT_HERSHEY_COMPLEX, 1.3, (255, 0, 0), 3,cv2.LINE_AA)
+            #Rectangle in text Builder
+            cv2.rectangle(image, (x_min-10, y_min-10), (x_max+10, y_max+10), (0, 255, 0), 2)
+            cv2.putText(image, predicted_character, (x_min - 10, y_min - 20), cv2.FONT_HERSHEY_DUPLEX, 1, (255, 0, 0), 3,cv2.LINE_AA)
 
-
-    cv2.imshow('frame', frame)
-    cv2.waitKey(1)
+    #Window Essentials
+    cv2.imshow('ASL Recognition', image)
+    if cv2.waitKey(10) & 0xFF == ord('q'):
+        break
     
